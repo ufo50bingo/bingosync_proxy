@@ -52,7 +52,7 @@ def hello_world():
             "game_type": "18",
             "variant_type": "187",
             "custom_json": request.form["custom_json"],
-            "lockout_mode": "2",
+            "lockout_mode": request.form["lockout_mode"],
             "seed": "",
             "is_spectator": "on",
             "hide_card": "on",
