@@ -14,24 +14,58 @@
 
 import signal
 import sys
-from types import FrameType
+import re
+import requests
 
-from flask import Flask
+from types import FrameType
+from flask import Flask, json, request
 
 from utils.logging import logger
 
 app = Flask(__name__)
 
 
-@app.route("/")
-def hello() -> str:
-    # Use basic logging with custom fields
-    logger.info(logField="custom-entry", arbitraryField="custom-entry")
+@app.route("/create", methods=["POST"])
+def hello_world():
+    bingosync_url = "https://www.bingosync.com"
 
-    # https://cloud.google.com/run/docs/logging#correlate-logs
-    logger.info("Child logger with trace Id.")
+    client = requests.session()
 
-    return "Hello, World!"
+    # janky way to get CSRF cookie and token
+    initial_response = client.get(bingosync_url)
+    result = re.search(
+        'name="csrfmiddlewaretoken" value="([a-zA-Z0-9]+)"',
+        initial_response.content.decode("utf-8"),
+    )
+    if result is None:
+        raise Exception("failed to find csrf token")
+
+    # post to room create url and include CSRF cookie and token
+    create_response = client.post(
+        bingosync_url,
+        cookies=initial_response.cookies,
+        data={
+            "csrfmiddlewaretoken": result.group(1),
+            "room_name": request.form["room_name"],
+            "passphrase": request.form["passphrase"],
+            "nickname": "ufo50bingobot",
+            "game_type": "18",
+            "variant_type": "187",
+            "custom_json": request.form["custom_json"],
+            "lockout_mode": "2",
+            "seed": "",
+            "is_spectator": "on",
+            "hide_card": "on",
+        },
+    )
+    if create_response.status_code != 200:
+        raise Exception("bad status code from bingosync")
+
+    # response URL is the new board URL
+    response = json.jsonify({"url": create_response.url})
+    return response, {
+        "Access-Control-Allow-Origin": "*",
+    }
 
 
 def shutdown_handler(signal_int: int, frame: FrameType) -> None:
